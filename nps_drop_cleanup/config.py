@@ -44,6 +44,7 @@ def env_int(name: str, default: int) -> int:
 class Config:
     # --- database ----------------------------------------------------------
     database_url: str = ""
+    baseline_database_url: str = ""  # optional pristine DB for chunk regression
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = ""
@@ -54,6 +55,8 @@ class Config:
     xlsx_path: str = "NPS_RAG_Ingestion_Review_TRIAGED.xlsx"
     sheet_urls: str = "DROP - URLs"
     sheet_docs: str = "DROP - Documents"
+    sheet_urls_keep: str = "KEEP - URLs"
+    sheet_docs_keep: str = "KEEP - Documents"
     col_example_url: str = "Example full URL"
     col_canonical_url: str = "Canonical page (all locale/alias variants merged)"
     col_file_name: str = "File name"
@@ -132,25 +135,29 @@ class Config:
 def load_config(env_file: str | None = None) -> Config:
     """Load the configuration from the environment / an `.env` file.
 
-    Environment variables already exported by the shell take precedence over the
-    values inside the `.env` file.
+    When ``env_file`` is not given, a ``.env`` in the current working directory
+    is loaded automatically (if present). Environment variables already
+    exported by the shell take precedence over the values in the file.
     """
-    if env_file:
+    candidate = env_file or (".env" if Path(".env").is_file() else None)
+    if candidate:
         try:
             from dotenv import load_dotenv
 
-            load_dotenv(env_file, override=False)
+            load_dotenv(candidate, override=False)
         except ImportError:
-            raise RuntimeError(
-                "python-dotenv is required to load an --env file. "
-                "Install dependencies first: pip install -r requirements.txt"
-            )
+            if env_file:
+                raise RuntimeError(
+                    "python-dotenv is required to load an --env file. "
+                    "Install dependencies first: pip install -r requirements.txt"
+                )
 
     raw_status = env_str("STATUS_FILTER", "")
     status_filter = tuple(s.strip().upper() for s in raw_status.split(",") if s.strip())
 
     cfg = Config(
         database_url=env_str("DATABASE_URL", ""),
+        baseline_database_url=env_str("BASELINE_DATABASE_URL", ""),
         db_host=env_str("DB_HOST", "localhost"),
         db_port=env_int("DB_PORT", 5432),
         db_name=env_str("DB_NAME", ""),
@@ -159,6 +166,8 @@ def load_config(env_file: str | None = None) -> Config:
         xlsx_path=env_str("XLSX_PATH", "NPS_RAG_Ingestion_Review_TRIAGED.xlsx"),
         sheet_urls=env_str("SHEET_URLS", "DROP - URLs"),
         sheet_docs=env_str("SHEET_DOCS", "DROP - Documents"),
+        sheet_urls_keep=env_str("SHEET_URLS_KEEP", "KEEP - URLs"),
+        sheet_docs_keep=env_str("SHEET_DOCS_KEEP", "KEEP - Documents"),
         col_example_url=env_str("COL_EXAMPLE_URL", "Example full URL"),
         col_canonical_url=env_str(
             "COL_CANONICAL_URL", "Canonical page (all locale/alias variants merged)"
@@ -187,7 +196,7 @@ def load_config(env_file: str | None = None) -> Config:
         output_dir=Path(env_str("OUTPUT_DIR", "./output")),
         timestamped_reports=env_bool("TIMESTAMPED_REPORTS", True),
         log_level=env_str("LOG_LEVEL", "INFO").strip().upper(),
-        env_file=env_file,
+        env_file=candidate,
         _validated=True,
     )
     return cfg
@@ -201,6 +210,7 @@ def print_summary(cfg: Config) -> str:
         f"  URL sheet  / col        : {cfg.sheet_urls!r} / {cfg.col_example_url!r}",
         f"  Canonical col (flag={cfg.include_canonical_urls}): {cfg.col_canonical_url!r}",
         f"  File sheet / col        : {cfg.sheet_docs!r} / {cfg.col_file_name!r}",
+        f"  KEEP sheets             : {cfg.sheet_urls_keep!r} / {cfg.sheet_docs_keep!r}",
         f"  URL normalization       : lowercase={cfg.url_lowercase} strip_www={cfg.url_strip_www} "
         f"strip_query={cfg.url_strip_query} strip_fragment={cfg.url_strip_fragment} "
         f"strip_slash={cfg.url_strip_trailing_slash}",
@@ -216,4 +226,6 @@ def print_summary(cfg: Config) -> str:
         f"  CHUNK_SET_IS_CURRENT    : {cfg.chunk_set_is_current}",
         f"  INCLUDES soft in leftovers CSV: {cfg.include_soft_deleted_in_leftovers}",
     ]
+    if cfg.baseline_database_url:
+        lines.append(f"  BASELINE_DATABASE_URL   : {cfg.baseline_database_url}")
     return "\n".join(lines)

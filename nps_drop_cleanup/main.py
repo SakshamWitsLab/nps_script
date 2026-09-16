@@ -16,9 +16,10 @@ from openpyxl import load_workbook
 
 import config as config_mod
 import db as db_mod
+from chunk_plan import build_chunk_plan
 from config import Config
 from deleter import delete
-from excel_reader import read_excel
+from excel_reader import read_excel, read_keep
 from logger import SectionLog, setup_logging
 from matcher import Matcher
 import reporter
@@ -40,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _print_detection_summary(log, excel, res) -> None:
+def _print_detection_summary(log, excel, res, plan=None) -> None:
     breakdown = res.status_breakdown()
     url_example = sum(1 for t in excel.url_targets if not t.is_canonical)
     url_canonical = res.url_targets_used - url_example
@@ -64,6 +65,11 @@ def _print_detection_summary(log, excel, res) -> None:
     if breakdown["by_status"]:
         statuses = ", ".join(f"{k}={v}" for k, v in sorted(breakdown["by_status"].items()))
         log.info("  Matched status mix              : %s", statuses)
+    if plan is not None:
+        log.info("")
+        log.info("Chunk plan (identity = document_chunks.doc_name):")
+        for line in plan.summary_lines():
+            log.info("%s", line)
     if res.url_misses or res.file_misses:
         log.info("")
         log.info("  Targets with NO DB match:")
@@ -71,11 +77,18 @@ def _print_detection_summary(log, excel, res) -> None:
         log.info("    - Files: %d", len(res.file_misses))
 
 
-def _confirm_delete(cfg: Config, count: int) -> bool:
+def _confirm_delete(cfg: Config, count: int, plan=None) -> bool:
     print()
     print(f"About to {cfg.delete_mode}-delete {count} document row(s).")
-    print("  hard -> DELETE FROM documents (chunks cascade via FK)")
-    print("  soft -> status=TRASHED, deleted_at=now(), chunks is_deleted=true")
+    if plan is not None:
+        print(f"  - {plan.drop_chunks} chunk(s) matched by doc_name will be removed")
+        print(f"  - {plan.survivors} surviving chunk(s) preserved "
+              f"({len(plan.keep_chunk_ids)} KEEP, {len(plan.untouched_chunk_ids)} other)")
+        print(f"  - {len(plan.reparent)} surviving chunk(s) reparented off DROP containers")
+        if plan.anomalies:
+            print(f"  - WARNING: {len(plan.anomalies)} chunk(s) have no surviving owner")
+    print("  hard -> DELETE the planned chunks, then DELETE FROM documents")
+    print("  soft -> chunks matching DROP marked is_deleted; documents status=TRASHED")
     answer = input("Proceed? [y/N] ").strip().lower()
     return answer in ("y", "yes")
 
@@ -132,12 +145,17 @@ def main(argv=None) -> int:
         section.step("Read triage workbook",
                      f"{cfg.xlsx_path} -> sheets {cfg.sheet_urls!r} / {cfg.sheet_docs!r}")
         excel = read_excel(cfg)
-        log.info("Parsed %d URL targets and %d file targets (skipped rows: urls=%d files=%d).",
+        log.info("Parsed %d URL targets and %d file targets (skipped rows: urls=%d files=%d, "
+                 "header-artifact rows ignored=%d).",
                  len(excel.url_targets), len(excel.file_targets),
-                 excel.url_rows_skipped, excel.file_rows_skipped)
+                 excel.url_rows_skipped, excel.file_rows_skipped,
+                 excel.header_artifact_rows)
         if not excel.url_targets and not excel.file_targets:
             log.error("No targets could be read from the workbook. Aborting.")
             return 3
+        keep = read_keep(cfg)
+        log.info("Parsed %d KEEP URL targets and %d KEEP file targets (used to "
+                 "protect chunks).", len(keep.url_targets), len(keep.file_targets))
 
         # STEP 2: connect + statistics
         section.step("Connect to PostgreSQL")
@@ -158,11 +176,14 @@ def main(argv=None) -> int:
                          f"delete_mode={cfg.delete_mode}, batch_size={cfg.batch_size}")
             matcher = Matcher(conn, cfg)
             res = matcher.detect(excel, log=log)
-            _print_detection_summary(log, excel, res)
+
+            # STEP 3b: plan chunk fate by identity (protects KEEP chunks)
+            plan = build_chunk_plan(conn, cfg, excel, keep, res.matched_ids, log=log)
+            _print_detection_summary(log, excel, res, plan)
 
             # STEP 4: pre reports
             section.step("Write pre-delete reports")
-            pre_md, pre_json = reporter.write_pre(cfg, excel, res, out_dir)
+            pre_md, pre_json = reporter.write_pre(cfg, excel, res, out_dir, plan=plan)
             audit = reporter.write_matched_audit_csv(cfg, res, out_dir)
             log.info("Pre reports written: %s", ", ".join(str(x) for x in (pre_md, pre_json, audit)))
 
@@ -182,17 +203,17 @@ def main(argv=None) -> int:
                 return 0
 
             # STEP 6: confirm
-            if not _confirm_delete(cfg, matches):
+            if not _confirm_delete(cfg, matches, plan):
                 log.info("Deletion cancelled by user.")
                 conn.rollback()
                 return 0
 
             # STEP 7: delete
             section.step(f"Apply {cfg.delete_mode} deletion")
-            del_stats = delete(conn, cfg, res.matched_ids, log=log)
-            log.info("Deleted %d documents / %d chunks in %d batch(es) [%.1fs].",
+            del_stats = delete(conn, cfg, plan, log=log)
+            log.info("Deleted %d documents / %d chunks (reparented %d) in %d batch(es) [%.1fs].",
                      del_stats.documents_affected, del_stats.chunks_affected,
-                     del_stats.batches, del_stats.duration_s)
+                     del_stats.chunks_reparented, del_stats.batches, del_stats.duration_s)
 
             # STEP 8: post check + reports
             section.step("Post-delete verification", "re-running the same matching queries")

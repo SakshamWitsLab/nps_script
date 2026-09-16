@@ -25,6 +25,13 @@ def connect(cfg: Config) -> psycopg.Connection:
     return conn
 
 
+def connect_url(url: str) -> psycopg.Connection:
+    """Open a second connection (e.g. to the pristine baseline database)."""
+    conn = psycopg.connect(url, row_factory=dict_row)
+    conn.autocommit = False
+    return conn
+
+
 def batch(seq: Sequence | set, size: int) -> Iterator[list]:
     items = list(seq)
     for i in range(0, len(items), size):
@@ -160,6 +167,91 @@ def fetch_active_chunks(conn) -> list[dict]:
             "ORDER BY c.source_type, c.doc_name"
         )
         return cur.fetchall()
+
+
+def fetch_all_chunks(conn) -> list[dict]:
+    """Every chunk row with the columns needed to plan by ``doc_name``."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, document_id, doc_name, source_type, is_deleted, is_current "
+            "FROM document_chunks"
+        )
+        return cur.fetchall()
+
+
+def fetch_document_owner_rows(conn) -> list[dict]:
+    """Minimal ``documents`` projection used to pick reparent owners."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id, document_name, source_type, status, deleted_at FROM documents"
+        )
+        return cur.fetchall()
+
+
+def reparent_chunks(conn, pairs: Sequence[tuple], batch_size: int = 1000) -> int:
+    """Point chunks at a new ``document_id``.
+
+    ``pairs`` are ``(chunk_id, new_document_id)``; the SQL parameter order is
+    swapped internally to match ``SET document_id = %s WHERE id = %s``.
+    """
+    pairs = list(pairs)
+    if not pairs:
+        return 0
+    affected = 0
+    for part in batch(pairs, batch_size):
+        rows = [(doc_id, chunk_id) for chunk_id, doc_id in part]
+        with conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE document_chunks SET document_id = %s WHERE id = %s", rows
+            )
+            affected += cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+    return affected
+
+
+def delete_chunks(conn, ids: Sequence, batch_size: int = 1000) -> int:
+    """Hard-delete chunks by id."""
+    ids = list(ids)
+    if not ids:
+        return 0
+    affected = 0
+    for part in batch(ids, batch_size):
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM document_chunks WHERE id = ANY(%s)", [list(part)])
+            affected += cur.rowcount
+    return affected
+
+
+def soft_delete_chunks(conn, ids: Sequence, set_is_current: bool = False,
+                       batch_size: int = 1000) -> int:
+    """Mark chunks deleted by id."""
+    ids = list(ids)
+    if not ids:
+        return 0
+    if set_is_current:
+        sql = ("UPDATE document_chunks SET is_deleted = true, is_current = false "
+               "WHERE id = ANY(%s) AND is_deleted = false")
+    else:
+        sql = ("UPDATE document_chunks SET is_deleted = true "
+               "WHERE id = ANY(%s) AND is_deleted = false")
+    affected = 0
+    for part in batch(ids, batch_size):
+        with conn.cursor() as cur:
+            cur.execute(sql, [list(part)])
+            affected += cur.rowcount
+    return affected
+
+
+def recalc_chunks_count(conn, doc_ids: Sequence, batch_size: int = 500) -> None:
+    """Refresh the denormalized ``documents.chunks_count`` for the given docs."""
+    doc_ids = list(doc_ids)
+    for part in batch(doc_ids, batch_size):
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE documents d SET chunks_count = COALESCE(("
+                "  SELECT count(*) FROM document_chunks c WHERE c.document_id = d.id"
+                "), 0) WHERE d.id = ANY(%s)",
+                [list(part)],
+            )
 
 
 def table_stats(conn) -> dict:

@@ -1,9 +1,9 @@
-"""Parsing of the DROP sheets in the triage workbook.
+"""Parsing of the DROP / KEEP sheets in the triage workbook.
 
 Expected workbook layout (from ``NPS_RAG_Ingestion_Review_TRIAGED.xlsx``):
 
-* ``DROP - URLs``      - column 'Example full URL' and 'Canonical page (...)'.
-* ``DROP - Documents`` - column 'File name'.
+* ``DROP - URLs`` / ``KEEP - URLs``           - 'Example full URL' + 'Canonical page (...)'.
+* ``DROP - Documents`` / ``KEEP - Documents`` - 'File name'.
 
 Column names are configurable through env (``COL_*``).
 """
@@ -26,6 +26,7 @@ class UrlTarget:
     original: str
     normalized: str
     section: str = ""
+    row: int = 0
 
     @property
     def is_canonical(self) -> bool:
@@ -36,6 +37,7 @@ class UrlTarget:
 class FileTarget:
     original: str
     section: str = ""
+    row: int = 0
 
 
 @dataclass
@@ -46,6 +48,7 @@ class ExcelData:
     url_rows_skipped: int = 0
     file_rows_total: int = 0
     file_rows_skipped: int = 0
+    header_artifact_rows: int = 0
 
     @property
     def distinct_url_norms(self) -> set[str]:
@@ -76,18 +79,23 @@ def _iter_rows(sheet):
         yield row
 
 
-def read_excel(cfg: Config) -> ExcelData:
+def read_targets(cfg: Config, url_sheet: str, doc_sheet: str) -> ExcelData:
+    """Read a pair of URL/Document sheets (used for both DROP and KEEP)."""
     wb = load_workbook(cfg.xlsx_path, read_only=True, data_only=True)
     try:
         data = ExcelData()
         # --- URL sheet -----------------------------------------------------
-        if cfg.sheet_urls not in wb.sheetnames:
+        if url_sheet not in wb.sheetnames:
             raise SheetFormatError(
-                f"Sheet {cfg.sheet_urls!r} missing. Have: {wb.sheetnames}"
+                f"Sheet {url_sheet!r} missing. Have: {wb.sheetnames}"
             )
-        ws_urls = wb[cfg.sheet_urls]
+        ws_urls = wb[url_sheet]
         headers = None
         cols: dict[str, int] = {}
+        invalid = {
+            cfg.col_example_url.strip().casefold(),
+            cfg.col_canonical_url.strip().casefold(),
+        }
         for row in _iter_rows(ws_urls):
             if headers is None:
                 headers = [c if c is not None else "" for c in row]
@@ -111,23 +119,28 @@ def read_excel(cfg: Config) -> ExcelData:
                 if not raw:
                     data.url_rows_skipped += 1
                     continue
+                if raw.casefold() in invalid:
+                    data.header_artifact_rows += 1
+                    continue
                 data.url_targets.append(
                     UrlTarget(
                         source_column=source,
                         original=raw,
                         normalized=normalize_url(raw, cfg),
                         section=section,
+                        row=data.url_rows_total,
                     )
                 )
 
         # --- File sheet ----------------------------------------------------
-        if cfg.sheet_docs not in wb.sheetnames:
+        if doc_sheet not in wb.sheetnames:
             raise SheetFormatError(
-                f"Sheet {cfg.sheet_docs!r} missing. Have: {wb.sheetnames}"
+                f"Sheet {doc_sheet!r} missing. Have: {wb.sheetnames}"
             )
-        ws_docs = wb[cfg.sheet_docs]
+        ws_docs = wb[doc_sheet]
         headers = None
         cols = {}
+        invalid = {cfg.col_file_name.strip().casefold()}
         for row in _iter_rows(ws_docs):
             if headers is None:
                 headers = [c if c is not None else "" for c in row]
@@ -142,7 +155,22 @@ def read_excel(cfg: Config) -> ExcelData:
             if not raw:
                 data.file_rows_skipped += 1
                 continue
-            data.file_targets.append(FileTarget(original=raw, section=section))
+            if raw.casefold() in invalid:
+                data.header_artifact_rows += 1
+                continue
+            data.file_targets.append(
+                FileTarget(original=raw, section=section, row=data.file_rows_total)
+            )
         return data
     finally:
         wb.close()
+
+
+def read_excel(cfg: Config) -> ExcelData:
+    """Read the DROP sheets."""
+    return read_targets(cfg, cfg.sheet_urls, cfg.sheet_docs)
+
+
+def read_keep(cfg: Config) -> ExcelData:
+    """Read the KEEP sheets."""
+    return read_targets(cfg, cfg.sheet_urls_keep, cfg.sheet_docs_keep)
