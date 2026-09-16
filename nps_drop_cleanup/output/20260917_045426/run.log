@@ -1,0 +1,88 @@
+[2026-09-17 04:54:26,153] INFO    nps_drop: Logging to output/20260917_045426/run.log
+[2026-09-17 04:54:26,153] INFO    nps_drop: NPS DROP cleanup starting (host=localhost db=(from DATABASE_URL))
+[2026-09-17 04:54:26,154] INFO    nps_drop:   Configuration:
+[2026-09-17 04:54:26,154] INFO    nps_drop:     xlsx                    : /home/saksham/Downloads/nps_script/NPS_RAG_Ingestion_Review_TRIAGED.xlsx
+[2026-09-17 04:54:26,154] INFO    nps_drop:     URL sheet  / col        : 'DROP - URLs' / 'Example full URL'
+[2026-09-17 04:54:26,154] INFO    nps_drop:     Canonical col (flag=True): 'Canonical page (all locale/alias variants merged)'
+[2026-09-17 04:54:26,154] INFO    nps_drop:     File sheet / col        : 'DROP - Documents' / 'File name'
+[2026-09-17 04:54:26,154] INFO    nps_drop:     KEEP sheets             : 'KEEP - URLs' / 'KEEP - Documents'
+[2026-09-17 04:54:26,154] INFO    nps_drop:     URL normalization       : lowercase=True strip_www=True strip_query=True strip_fragment=True strip_slash=True
+[2026-09-17 04:54:26,154] INFO    nps_drop:     File match strategy     : both (case_sensitive=False)
+[2026-09-17 04:54:26,154] INFO    nps_drop:     DELETE_MODE             : hard
+[2026-09-17 04:54:26,154] INFO    nps_drop:     DRY_RUN                 : False
+[2026-09-17 04:54:26,154] INFO    nps_drop:     BATCH_SIZE              : 500
+[2026-09-17 04:54:26,154] INFO    nps_drop:     STATUS_FILTER           : <all>
+[2026-09-17 04:54:26,154] INFO    nps_drop:     SKIP_ALREADY_DELETED    : True
+[2026-09-17 04:54:26,154] INFO    nps_drop:     INCLUDE_SUPERSEDES      : True
+[2026-09-17 04:54:26,154] INFO    nps_drop:     PURGE_ORPHAN_CHILDREN   : False
+[2026-09-17 04:54:26,154] INFO    nps_drop:     CHUNK_SET_IS_CURRENT    : False
+[2026-09-17 04:54:26,154] INFO    nps_drop:     INCLUDES soft in leftovers CSV: False
+[2026-09-17 04:54:26,154] INFO    nps_drop:     BASELINE_DATABASE_URL   : postgresql://postgres:postgres@localhost:5433/nps_chatbot
+[2026-09-17 04:54:26,154] INFO    nps_drop: 
+[2026-09-17 04:54:26,154] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:26,154] INFO    nps_drop: STEP 1  -  Read triage workbook
+[2026-09-17 04:54:26,154] INFO    nps_drop:            /home/saksham/Downloads/nps_script/NPS_RAG_Ingestion_Review_TRIAGED.xlsx -> sheets 'DROP - URLs' / 'DROP - Documents'
+[2026-09-17 04:54:26,154] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:26,181] INFO    nps_drop: Parsed 1643 URL targets and 189 file targets (skipped rows: urls=0 files=0, header-artifact rows ignored=1).
+[2026-09-17 04:54:26,193] INFO    nps_drop: Parsed 140 KEEP URL targets and 38 KEEP file targets (used to protect chunks).
+[2026-09-17 04:54:26,193] INFO    nps_drop: 
+[2026-09-17 04:54:26,193] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:26,193] INFO    nps_drop: STEP 2  -  Connect to PostgreSQL
+[2026-09-17 04:54:26,193] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:26,238] INFO    nps_drop: DB snapshot: 5965 documents (5329 URLs / 636 files / 0 soft-deleted), 44126 chunks (44126 active)
+[2026-09-17 04:54:26,239] INFO    nps_drop: 
+[2026-09-17 04:54:26,239] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:26,239] INFO    nps_drop: STEP 3  -  Detect matches (URLs via normalized JOIN, files via strategy)
+[2026-09-17 04:54:26,239] INFO    nps_drop:            delete_mode=hard, batch_size=500
+[2026-09-17 04:54:26,239] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:31,686] INFO    nps_drop: 
+[2026-09-17 04:54:31,686] INFO    nps_drop: Detection summary (from DROP sheets -> database):
+[2026-09-17 04:54:31,686] INFO    nps_drop:   URLs   sheet rows: 822 | example-url targets: 822 | canonical targets: 821 | distinct normalized: 894
+[2026-09-17 04:54:31,686] INFO    nps_drop:   Files  sheet rows: 189 | file targets: 189
+[2026-09-17 04:54:31,686] INFO    nps_drop: 
+[2026-09-17 04:54:31,686] INFO    nps_drop:   URL documents matched in DB    : 2353
+[2026-09-17 04:54:31,686] INFO    nps_drop:   File documents matched in DB   : 461
+[2026-09-17 04:54:31,686] INFO    nps_drop:   Total rows to remove (expanded): 2814 (0 via supersedes/children)
+[2026-09-17 04:54:31,686] INFO    nps_drop:   Chunks attached                 : 43790 total / 43790 active
+[2026-09-17 04:54:31,686] INFO    nps_drop:   Matched status mix              : COMPLETED=2043, ERROR=765, PROCESSING=6
+[2026-09-17 04:54:31,686] INFO    nps_drop: 
+[2026-09-17 04:54:31,686] INFO    nps_drop: Chunk plan (identity = document_chunks.doc_name):
+[2026-09-17 04:54:31,687] INFO    nps_drop:   Chunks to delete (by doc_name)  : 36864 (URL 2336 / file 34528)
+[2026-09-17 04:54:31,687] INFO    nps_drop:   KEEP chunks preserved           : 2241
+[2026-09-17 04:54:31,687] INFO    nps_drop:   Other chunks preserved          : 5021
+[2026-09-17 04:54:31,687] INFO    nps_drop:   Chunks reparented off DROP docs : 6926
+[2026-09-17 04:54:31,687] INFO    nps_drop:   Reparent anomalies (would lose) : 0
+[2026-09-17 04:54:31,687] INFO    nps_drop: 
+[2026-09-17 04:54:31,687] INFO    nps_drop:   Targets with NO DB match:
+[2026-09-17 04:54:31,687] INFO    nps_drop:     - URLs : 90
+[2026-09-17 04:54:31,687] INFO    nps_drop:     - Files: 0
+[2026-09-17 04:54:31,687] INFO    nps_drop: 
+[2026-09-17 04:54:31,687] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:31,687] INFO    nps_drop: STEP 4  -  Write pre-delete reports
+[2026-09-17 04:54:31,687] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:31,705] INFO    nps_drop: Pre reports written: output/20260917_045426/pre_report.md, output/20260917_045426/pre_report.json, output/20260917_045426/matched_documents.csv
+[2026-09-17 04:54:31,705] INFO    nps_drop: 
+[2026-09-17 04:54:31,705] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:31,705] INFO    nps_drop: STEP 5  -  Apply hard deletion
+[2026-09-17 04:54:31,705] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:31,708] INFO    nps_drop: Deleting 2814 document row(s) / 36864 chunk(s) in mode=hard (transaction held until end)
+[2026-09-17 04:54:33,223] INFO    nps_drop: Reparented 6926 surviving chunk(s) onto their own documents.
+[2026-09-17 04:54:35,532] INFO    nps_drop: Removed/soft-deleted 36864 chunk(s) by identity.
+[2026-09-17 04:54:35,760] INFO    nps_drop: Hard delete wave 1: removed 2297 row(s), 517 remaining.
+[2026-09-17 04:54:35,827] INFO    nps_drop: Hard delete wave 2: removed 309 row(s), 208 remaining.
+[2026-09-17 04:54:35,843] INFO    nps_drop: Hard delete wave 3: removed 116 row(s), 92 remaining.
+[2026-09-17 04:54:35,861] INFO    nps_drop: Hard delete wave 4: removed 43 row(s), 49 remaining.
+[2026-09-17 04:54:35,872] INFO    nps_drop: Hard delete wave 5: removed 25 row(s), 24 remaining.
+[2026-09-17 04:54:35,881] INFO    nps_drop: Hard delete wave 6: removed 17 row(s), 7 remaining.
+[2026-09-17 04:54:35,889] INFO    nps_drop: Hard delete wave 7: removed 4 row(s), 3 remaining.
+[2026-09-17 04:54:35,900] INFO    nps_drop: Hard delete wave 8: removed 3 row(s), 0 remaining.
+[2026-09-17 04:54:36,111] INFO    nps_drop: Delete complete: 2814 documents, 36864 chunks removed, 6926 chunks reparented in 4.4s
+[2026-09-17 04:54:36,111] INFO    nps_drop: Deleted 2814 documents / 36864 chunks (reparented 6926) in 8 batch(es) [4.4s].
+[2026-09-17 04:54:36,111] INFO    nps_drop: 
+[2026-09-17 04:54:36,111] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:36,111] INFO    nps_drop: STEP 6  -  Post-delete verification
+[2026-09-17 04:54:36,111] INFO    nps_drop:            re-running the same matching queries
+[2026-09-17 04:54:36,111] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:36,989] INFO    nps_drop: Post check: URL rows active remaining=0, file rows active remaining=0, active chunk leftovers=0
+[2026-09-17 04:54:36,989] INFO    nps_drop: VERIFICATION PASSED - nothing from the DROP list remains retrievable.
+[2026-09-17 04:54:36,989] INFO    nps_drop: Reports: output/20260917_045426/post_report.md, output/20260917_045426/post_report.json, output/20260917_045426/remaining_after_delete.csv

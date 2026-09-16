@@ -1,0 +1,50 @@
+[2026-09-17 04:54:50,546] INFO    nps_drop: Logging to output/20260917_045450/run.log
+[2026-09-17 04:54:50,546] INFO    nps_drop: NPS KEEP verification starting (host=localhost db=(from DATABASE_URL))
+[2026-09-17 04:54:50,546] INFO    nps_drop:   Configuration:
+[2026-09-17 04:54:50,546] INFO    nps_drop:     xlsx                    : /home/saksham/Downloads/nps_script/NPS_RAG_Ingestion_Review_TRIAGED.xlsx
+[2026-09-17 04:54:50,546] INFO    nps_drop:     URL sheet  / col        : 'DROP - URLs' / 'Example full URL'
+[2026-09-17 04:54:50,546] INFO    nps_drop:     Canonical col (flag=True): 'Canonical page (all locale/alias variants merged)'
+[2026-09-17 04:54:50,546] INFO    nps_drop:     File sheet / col        : 'DROP - Documents' / 'File name'
+[2026-09-17 04:54:50,546] INFO    nps_drop:     KEEP sheets             : 'KEEP - URLs' / 'KEEP - Documents'
+[2026-09-17 04:54:50,546] INFO    nps_drop:     URL normalization       : lowercase=True strip_www=True strip_query=True strip_fragment=True strip_slash=True
+[2026-09-17 04:54:50,546] INFO    nps_drop:     File match strategy     : both (case_sensitive=False)
+[2026-09-17 04:54:50,546] INFO    nps_drop:     DELETE_MODE             : soft
+[2026-09-17 04:54:50,546] INFO    nps_drop:     DRY_RUN                 : True
+[2026-09-17 04:54:50,546] INFO    nps_drop:     BATCH_SIZE              : 500
+[2026-09-17 04:54:50,546] INFO    nps_drop:     STATUS_FILTER           : <all>
+[2026-09-17 04:54:50,546] INFO    nps_drop:     SKIP_ALREADY_DELETED    : True
+[2026-09-17 04:54:50,546] INFO    nps_drop:     INCLUDE_SUPERSEDES      : True
+[2026-09-17 04:54:50,546] INFO    nps_drop:     PURGE_ORPHAN_CHILDREN   : False
+[2026-09-17 04:54:50,546] INFO    nps_drop:     CHUNK_SET_IS_CURRENT    : False
+[2026-09-17 04:54:50,546] INFO    nps_drop:     INCLUDES soft in leftovers CSV: False
+[2026-09-17 04:54:50,546] INFO    nps_drop:     BASELINE_DATABASE_URL   : postgresql://postgres:postgres@localhost:5433/nps_chatbot
+[2026-09-17 04:54:50,546] INFO    nps_drop: 
+[2026-09-17 04:54:50,546] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,546] INFO    nps_drop: STEP 1  -  Read KEEP sheets
+[2026-09-17 04:54:50,546] INFO    nps_drop:            /home/saksham/Downloads/nps_script/NPS_RAG_Ingestion_Review_TRIAGED.xlsx -> 'KEEP - URLs' / 'KEEP - Documents'
+[2026-09-17 04:54:50,546] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,553] INFO    nps_drop: Parsed 140 KEEP URL targets and 38 KEEP file targets.
+[2026-09-17 04:54:50,596] INFO    nps_drop: Baseline DB for chunk comparison: nps_chatbot
+[2026-09-17 04:54:50,597] INFO    nps_drop: 
+[2026-09-17 04:54:50,597] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,597] INFO    nps_drop: STEP 2  -  Connect to PostgreSQL
+[2026-09-17 04:54:50,597] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,620] INFO    nps_drop: DB snapshot: 3151 documents (0 soft-deleted), 7262 chunks (7262 active)
+[2026-09-17 04:54:50,620] INFO    nps_drop: 
+[2026-09-17 04:54:50,620] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,620] INFO    nps_drop: STEP 3  -  Check KEEP targets against the database
+[2026-09-17 04:54:50,620] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,825] INFO    nps_drop: 
+[2026-09-17 04:54:50,825] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,825] INFO    nps_drop: STEP 4  -  Write check-report
+[2026-09-17 04:54:50,825] INFO    nps_drop: ======================================================================
+[2026-09-17 04:54:50,828] INFO    nps_drop: 
+[2026-09-17 04:54:50,828] INFO    nps_drop: KEEP verification summary:
+[2026-09-17 04:54:50,828] INFO    nps_drop:   URL  targets: 70  (active=70, chunks_lost=0, inactive=0, missing=0)
+[2026-09-17 04:54:50,828] INFO    nps_drop:   FILE targets: 38  (active=38, chunks_lost=0, inactive=0, missing=0)
+[2026-09-17 04:54:50,828] INFO    nps_drop:   Matched documents: 360
+[2026-09-17 04:54:50,828] INFO    nps_drop:   KEEP chunks by doc_name: total=2241 active=2241 (baseline=2241)
+[2026-09-17 04:54:50,828] INFO    nps_drop:   KEEP/DROP overlaps: URLs=0 files=0
+[2026-09-17 04:54:50,828] INFO    nps_drop: 
+[2026-09-17 04:54:50,828] INFO    nps_drop: VERIFICATION PASSED - every KEEP target is present and retrievable.
+[2026-09-17 04:54:50,828] INFO    nps_drop: Reports: output/20260917_045450/check_report.md, output/20260917_045450/check_report.json, output/20260917_045450/check_keep_targets.csv

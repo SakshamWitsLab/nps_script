@@ -1,9 +1,9 @@
 # Pre-delete report
 
-- Generated: 2026-09-17T04:08:40
+- Generated: 2026-09-17T04:54:31
 - Workbook: `/home/saksham/Downloads/nps_script/NPS_RAG_Ingestion_Review_TRIAGED.xlsx`
 - URL sheet: `DROP - URLs` | file sheet: `DROP - Documents`
-- Delete mode: `soft` | DRY_RUN: `True`
+- Delete mode: `hard` | DRY_RUN: `False`
 
 ## Workbook targets
 
@@ -17,7 +17,15 @@
 - URL documents matched: **2353**
 - DOCUMENT rows matched: **461**
 - Total documents to remove (after expansion): **2814** (expanded via supersedes/children: **0**)
-- Attached chunks: total **43790**, active **43790**
+- Chunks attached (by container document_id): total **43790**, active **43790**
+
+### Chunk plan (identity = `document_chunks.doc_name`)
+
+- Chunks to delete by identity: **36864** (URL **2336** / file **34528**)
+- KEEP chunks preserved: **2241**
+- Other (untouched) chunks preserved: **5021**
+- Surviving chunks reparented off DROP containers: **6926**
+- Reparent anomalies (no surviving owner): **0**
 
 ### Breakdown by status / source type (matched rows)
 

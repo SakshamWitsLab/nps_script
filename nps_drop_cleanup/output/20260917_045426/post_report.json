@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-09-17T04:54:36",
+  "delete_mode": "hard",
+  "deletion": {
+    "mode": "hard",
+    "documents_affected": 2814,
+    "chunks_affected": 36864,
+    "chunks_reparented": 6926,
+    "batches": 8,
+    "duration_seconds": 4.405
+  },
+  "verification": {
+    "url_rows_present": 0,
+    "url_rows_active": 0,
+    "file_rows_present": 0,
+    "file_rows_active": 0,
+    "active_chunks_leftover": 0,
+    "pass": true
+  }
+}
