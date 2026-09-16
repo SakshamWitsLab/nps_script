@@ -421,8 +421,8 @@ def _db_label(cfg: Config, field: str = "database_url") -> str:
     if url:
         tail = url.rsplit("/", 1)[-1]
         return tail or f"(from {field.upper()})"
-    if field != "database_url":
-        return "(not set)"
+    if field == "baseline_database_url":
+        return cfg.baseline_db_name or "(not set)"
     return cfg.db_name or "(unknown)"
 
 

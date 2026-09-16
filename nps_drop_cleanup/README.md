@@ -127,7 +127,8 @@ URL` or `Canonical page`) matches, because the canonical alias sometimes drops a
 `/web/pfrda/` path infix.
 
 **Baseline comparison.** To detect lost chunks, point the checker at a pristine
-copy via `BASELINE_DATABASE_URL` (or `--baseline-env FILE`). A target that had
+copy via `BASELINE_PG_*` / `BASELINE_DATABASE_URL` (or `--baseline-env FILE`).
+A target that had
 chunks there but has none now becomes `CHUNKS_LOST` and fails. Without a
 baseline the chunk comparison is report-only and only document presence is
 enforced.
@@ -144,7 +145,7 @@ overlap; `1` otherwise (useful for CI). KEEP sheet names are configurable via
 
 1. **Read the workbook** – loads both DROP sheets using the configured column
    names; rows without a value are skipped and counted.
-2. **Connect** – PostgreSQL connection from `DATABASE_URL` or `DB_*` vars.
+2. **Connect** – PostgreSQL connection from `PG_*` parts or a full `DATABASE_URL`.
 3. **Detect** (the "how much detected" part):
    - URLs are normalized (scheme/www/query/fragment/trailing-slash aware) in
      Python, loaded into a temp table, and joined against `documents` with the
@@ -176,7 +177,8 @@ See `.env.example` for the full annotated list. Highlights:
 
 | Variable                         | Default                                  | Meaning                                                        |
 | -------------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
-| `DATABASE_URL`                   | *(empty)*                                | Full conn string; else build from `DB_*`.                     |
+| `PG_HOST` / `PG_PORT` / `PG_USER` / `PG_PASSWORD` / `PG_DATABASE` | `localhost` / `5432` / *(empty)* / *(empty)* / *(empty)* | Connection parts used to build the target DSN. |
+| `DATABASE_URL`                   | *(empty)*                                | Full conn string; overrides the `PG_*` parts.                 |
 | `XLSX_PATH`                      | `./NPS_RAG_Ingestion_Review_TRIAGED.xlsx`| Workbook to read.                                              |
 | `INCLUDE_CANONICAL_URLS`         | `true`                                   | Also use the `Canonical page` column for URL dropping.        |
 | `URL_STRIP_WWW/QUERY/FRAGMENT`,<br/>`URL_STRIP_TRAILING_SLASH`, `URL_LOWERCASE` | `true` ×5 | URL normalization switches used on both Python & SQL sides.             |
@@ -190,7 +192,7 @@ See `.env.example` for the full annotated list. Highlights:
 | `PURGE_ORPHAN_CHILDREN`          | `false`                                  | Also remove child rows whose parent got matched.              |
 | `CHUNK_SET_IS_CURRENT`           | `false`                                  | In soft mode also set `is_current=false` on chunks.          |
 | `INCLUDE_SOFT_DELETED_IN_LEFTOVERS` | `false`                                | Write soft-deleted rows into the leftover CSV too.            |
-| `BASELINE_DATABASE_URL`          | *(empty)*                                | Pristine DB used by `check_keep.py` for chunk-regression compare. |
+| `BASELINE_PG_*` (or `BASELINE_DATABASE_URL`) | *(empty)*                    | Pristine DB used by `check_keep.py` for chunk-regression compare. Blank `BASELINE_PG_*` falls back to `PG_*`. |
 | `BATCH_SIZE`                     | `500`                                    | Documents per DELETE/UPDATE batch.                             |
 | `OUTPUT_DIR` / `TIMESTAMPED_REPORTS` | `./output` / `true`                   | Where reports/CSVs go.                                        |
 

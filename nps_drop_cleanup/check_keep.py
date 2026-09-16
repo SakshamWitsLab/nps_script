@@ -29,8 +29,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-disjoint", action="store_true",
                    help="skip the KEEP vs DROP overlap check")
     p.add_argument("--baseline-env", default=None,
-                   help="path to a .env whose DATABASE_URL is the pristine "
-                        "baseline DB (overrides BASELINE_DATABASE_URL)")
+                   help="path to a .env holding the pristine baseline DB "
+                        "(BASELINE_DATABASE_URL or PG_*; overrides config)")
     p.add_argument("--no-baseline", action="store_true",
                    help="skip the chunk-regression comparison against a baseline")
     p.add_argument("--show-config", action="store_true",
@@ -38,13 +38,35 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _baseline_url(args, cfg) -> str:
+def _baseline_conninfo(args, cfg) -> str:
+    """Resolve the baseline connection string from --baseline-env or the config."""
     if args.baseline_env:
         from dotenv import dotenv_values
 
         values = dotenv_values(args.baseline_env)
-        return (values.get("DATABASE_URL") or "").strip()
-    return cfg.baseline_database_url
+        url = (values.get("BASELINE_DATABASE_URL") or "").strip()
+        if url:
+            return url
+        name = (values.get("PG_DATABASE") or values.get("DB_NAME") or "").strip()
+        if name:
+            return (
+                f"host={values.get('PG_HOST') or values.get('DB_HOST') or 'localhost'} "
+                f"port={values.get('PG_PORT') or values.get('DB_PORT') or '5432'} "
+                f"dbname={name} "
+                f"user={values.get('PG_USER') or values.get('DB_USER') or ''} "
+                f"password={values.get('PG_PASSWORD') or values.get('DB_PASSWORD') or ''}"
+            )
+        return ""
+    return cfg.baseline_conninfo()
+
+
+def _conn_label(conn: str) -> str:
+    if "/" in conn:
+        return conn.rsplit("/", 1)[-1]
+    for part in conn.split():
+        if part.startswith("dbname="):
+            return part.split("=", 1)[1]
+    return conn or "(unknown)"
 
 
 def main(argv=None) -> int:
@@ -87,16 +109,16 @@ def main(argv=None) -> int:
         if not args.no_disjoint:
             drop = read_excel(cfg)
 
-        baseline_url = "" if args.no_baseline else _baseline_url(args, cfg)
+        baseline_conninfo = "" if args.no_baseline else _baseline_conninfo(args, cfg)
         baseline_conn = None
-        if baseline_url:
+        if baseline_conninfo:
             try:
-                baseline_conn = db_mod.connect_url(baseline_url)
+                baseline_conn = db_mod.connect_url(baseline_conninfo)
                 log.info("Baseline DB for chunk comparison: %s",
-                         baseline_url.rsplit("/", 1)[-1])
+                         _conn_label(baseline_conninfo))
             except Exception:
                 log.warning("Could not connect to baseline DB %r - chunk regression "
-                            "check will be report-only.", baseline_url)
+                            "check will be report-only.", baseline_conninfo)
                 baseline_conn = None
 
         section.step("Connect to PostgreSQL")

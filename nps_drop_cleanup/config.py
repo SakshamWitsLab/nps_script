@@ -40,6 +40,26 @@ def env_int(name: str, default: int) -> int:
         return default
 
 
+def env_first(names: tuple, default: str = "") -> str:
+    """First non-empty env var among ``names`` (later names are fallbacks)."""
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip() != "":
+            return value.strip()
+    return default
+
+
+def env_int_first(names: tuple, default: int) -> int:
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip() != "":
+            try:
+                return int(value.strip())
+            except ValueError:
+                return default
+    return default
+
+
 @dataclass
 class Config:
     # --- database ----------------------------------------------------------
@@ -50,6 +70,12 @@ class Config:
     db_name: str = ""
     db_user: str = ""
     db_password: str = ""
+    # baseline connection (used when baseline_database_url is empty)
+    baseline_db_host: str = "localhost"
+    baseline_db_port: int = 5432
+    baseline_db_name: str = ""
+    baseline_db_user: str = ""
+    baseline_db_password: str = ""
 
     # --- input workbook ----------------------------------------------------
     xlsx_path: str = "NPS_RAG_Ingestion_Review_TRIAGED.xlsx"
@@ -105,6 +131,18 @@ class Config:
             f"user={self.db_user} password={self.db_password}"
         )
 
+    def baseline_conninfo(self) -> str:
+        """Connection string for the pristine baseline DB (empty if not set)."""
+        if self.baseline_database_url:
+            return self.baseline_database_url
+        if not self.baseline_db_name:
+            return ""
+        return (
+            f"host={self.baseline_db_host} port={self.baseline_db_port} "
+            f"dbname={self.baseline_db_name} user={self.baseline_db_user} "
+            f"password={self.baseline_db_password}"
+        )
+
     @property
     def url_source_columns(self) -> list[str]:
         cols = [self.col_example_url]
@@ -115,7 +153,7 @@ class Config:
     def validate(self) -> list[str]:
         errors: list[str] = []
         if not self.database_url and not self.db_name:
-            errors.append("No database configured: set DATABASE_URL or DB_NAME (+ DB_USER/DB_HOST/etc).")
+            errors.append("No database configured: set DATABASE_URL or PG_DATABASE (+ PG_USER/PG_HOST/etc).")
         if not Path(self.xlsx_path).is_file():
             errors.append(f"XLSX_PATH does not exist: {self.xlsx_path}")
         if not Path(self.xlsx_path).suffix.lower() in (".xlsx", ".xlsm"):
@@ -155,14 +193,32 @@ def load_config(env_file: str | None = None) -> Config:
     raw_status = env_str("STATUS_FILTER", "")
     status_filter = tuple(s.strip().upper() for s in raw_status.split(",") if s.strip())
 
+    # Connection parts: PG_* names first, DB_* kept as backward-compatible aliases.
+    db_host = env_first(("PG_HOST", "DB_HOST"), "localhost")
+    db_port = env_int_first(("PG_PORT", "DB_PORT"), 5432)
+    db_name = env_first(("PG_DATABASE", "DB_NAME"), "")
+    db_user = env_first(("PG_USER", "DB_USER"), "")
+    db_password = env_first(("PG_PASSWORD", "DB_PASSWORD"), "")
+
+    b_host = env_first(("BASELINE_PG_HOST", "BASELINE_DB_HOST"), db_host)
+    b_port = env_int_first(("BASELINE_PG_PORT", "BASELINE_DB_PORT"), db_port)
+    b_name = env_first(("BASELINE_PG_DATABASE", "BASELINE_DB_NAME"), "")
+    b_user = env_first(("BASELINE_PG_USER", "BASELINE_DB_USER"), db_user)
+    b_password = env_first(("BASELINE_PG_PASSWORD", "BASELINE_DB_PASSWORD"), db_password)
+
     cfg = Config(
         database_url=env_str("DATABASE_URL", ""),
         baseline_database_url=env_str("BASELINE_DATABASE_URL", ""),
-        db_host=env_str("DB_HOST", "localhost"),
-        db_port=env_int("DB_PORT", 5432),
-        db_name=env_str("DB_NAME", ""),
-        db_user=env_str("DB_USER", ""),
-        db_password=env_str("DB_PASSWORD", ""),
+        db_host=db_host,
+        db_port=db_port,
+        db_name=db_name,
+        db_user=db_user,
+        db_password=db_password,
+        baseline_db_host=b_host,
+        baseline_db_port=b_port,
+        baseline_db_name=b_name,
+        baseline_db_user=b_user,
+        baseline_db_password=b_password,
         xlsx_path=env_str("XLSX_PATH", "NPS_RAG_Ingestion_Review_TRIAGED.xlsx"),
         sheet_urls=env_str("SHEET_URLS", "DROP - URLs"),
         sheet_docs=env_str("SHEET_DOCS", "DROP - Documents"),
@@ -204,8 +260,12 @@ def load_config(env_file: str | None = None) -> Config:
 
 def print_summary(cfg: Config) -> str:
     """Human readable, env-level summary of the active configuration."""
+    conn = cfg.database_url or (
+        f"{cfg.db_user}@{cfg.db_host}:{cfg.db_port}/{cfg.db_name}"
+    )
     lines = [
         "Configuration:",
+        f"  DB (target)             : {conn}",
         f"  xlsx                    : {cfg.xlsx_path}",
         f"  URL sheet  / col        : {cfg.sheet_urls!r} / {cfg.col_example_url!r}",
         f"  Canonical col (flag={cfg.include_canonical_urls}): {cfg.col_canonical_url!r}",
@@ -226,6 +286,7 @@ def print_summary(cfg: Config) -> str:
         f"  CHUNK_SET_IS_CURRENT    : {cfg.chunk_set_is_current}",
         f"  INCLUDES soft in leftovers CSV: {cfg.include_soft_deleted_in_leftovers}",
     ]
-    if cfg.baseline_database_url:
-        lines.append(f"  BASELINE_DATABASE_URL   : {cfg.baseline_database_url}")
+    baseline = cfg.baseline_conninfo()
+    if baseline:
+        lines.append(f"  DB (baseline)           : {baseline}")
     return "\n".join(lines)
